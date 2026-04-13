@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProfiCalc – Smart Shop Profit Calculator</title>
+  <meta name="description" content="ProfiCalc helps small shop owners manage products, billing, stock, damage, and profit calculation effortlessly." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ─── Sidebar Navigation ─── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">₹</div>
+      <div>
+        <div class="logo-title">ProfiCalc</div>
+        <div class="logo-sub">Smart Shop Manager</div>
+      </div>
+    </div>
+
+    <nav class="nav-links">
+      <a href="#" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-page="add-product" id="nav-add-product">
+        <span class="nav-icon">➕</span>
+        <span>Add Product</span>
+      </a>
+      <a href="#" class="nav-item" data-page="products" id="nav-products">
+        <span class="nav-icon">📦</span>
+        <span>Product List</span>
+      </a>
+      <a href="#" class="nav-item" data-page="billing" id="nav-billing">
+        <span class="nav-icon">🧾</span>
+        <span>Billing</span>
+      </a>
+      <a href="#" class="nav-item" data-page="damage" id="nav-damage">
+        <span class="nav-icon">⚠️</span>
+        <span>Damage Entry</span>
+      </a>
+      <a href="#" class="nav-item" data-page="transactions" id="nav-transactions">
+        <span class="nav-icon">📋</span>
+        <span>Transactions</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-clear" id="btn-clear-data" onclick="clearAllData()">🗑️ Clear All Data</button>
+    </div>
+  </aside>
+
+  <!-- ─── Mobile Top Bar ─── -->
+  <div class="topbar" id="topbar">
+    <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title">ProfiCalc</div>
+    <div class="topbar-date" id="topbar-date"></div>
+  </div>
+
+  <!-- ─── Main Content ─── -->
+  <main class="main-content" id="main-content">
+
+    <!-- ═══ DASHBOARD PAGE ═══ -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <p class="page-sub" id="dashboard-date"></p>
+      </div>
+
+      <div class="metric-grid" id="metric-grid">
+        <div class="metric-card sales">
+          <div class="metric-icon">💰</div>
+          <div class="metric-body">
+            <div class="metric-label">Total Sales</div>
+            <div class="metric-value" id="m-sales">₹0.00</div>
+          </div>
+          <div class="metric-trend up" id="m-sales-trend">—</div>
+        </div>
+        <div class="metric-card profit">
+          <div class="metric-icon">📈</div>
+          <div class="metric-body">
+            <div class="metric-label">Total Profit</div>
+            <div class="metric-value" id="m-profit">₹0.00</div>
+          </div>
+          <div class="metric-trend up" id="m-profit-trend">—</div>
+        </div>
+        <div class="metric-card damage">
+          <div class="metric-icon">📉</div>
+          <div class="metric-body">
+            <div class="metric-label">Damage Loss</div>
+            <div class="metric-value" id="m-damage">₹0.00</div>
+          </div>
+          <div class="metric-trend down" id="m-damage-trend">—</div>
+        </div>
+        <div class="metric-card net">
+          <div class="metric-icon">🏆</div>
+          <div class="metric-body">
+            <div class="metric-label">Net Profit</div>
+            <div class="metric-value" id="m-net">₹0.00</div>
+          </div>
+          <div class="metric-trend" id="m-net-trend">—</div>
+        </div>
+        <div class="metric-card products">
+          <div class="metric-icon">📦</div>
+          <div class="metric-body">
+            <div class="metric-label">Total Products</div>
+            <div class="metric-value" id="m-products">0</div>
+          </div>
+          <div class="metric-trend" id="m-products-trend">—</div>
+        </div>
+        <div class="metric-card transactions">
+          <div class="metric-icon">🧾</div>
+          <div class="metric-body">
+            <div class="metric-label">Transactions</div>
+            <div class="metric-value" id="m-transactions">0</div>
+          </div>
+          <div class="metric-trend" id="m-txn-trend">—</div>
+        </div>
+      </div>
+
+      <!-- Low Stock Alerts -->
+      <div class="section-title">Low Stock Alerts</div>
+      <div id="low-stock-container">
+        <div class="empty-state">✅ All products have sufficient stock</div>
+      </div>
+
+      <!-- Today's Summary -->
+      <div class="section-title" style="margin-top:2rem">Today's Summary</div>
+      <div id="today-summary-container">
+        <div class="empty-state">No transactions recorded today</div>
+      </div>
+    </section>
+
+    <!-- ═══ ADD PRODUCT PAGE ═══ -->
+    <section class="page" id="page-add-product">
+      <div class="page-header">
+        <h1>Add New Product</h1>
+        <p class="page-sub">Fill in the details to add a product to your inventory</p>
+      </div>
+
+      <div class="form-card">
+        <form id="add-product-form" onsubmit="addProduct(event)">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="p-name">Product Name <span class="req">*</span></label>
+              <input type="text" id="p-name" placeholder="e.g. Basmati Rice 1kg" required />
+            </div>
+            <div class="form-group">
+              <label for="p-qty">Initial Stock Quantity <span class="req">*</span></label>
+              <input type="number" id="p-qty" placeholder="e.g. 100" min="0" required />
+            </div>
+            <div class="form-group">
+              <label for="p-wholesale">Wholesale Price (₹) <span class="req">*</span></label>
+              <div class="input-icon-wrap">
+                <span class="input-prefix">₹</span>
+                <input type="number" id="p-wholesale" placeholder="0.00" min="0" step="0.01" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="p-selling">Selling Price (₹) <span class="req">*</span></label>
+              <div class="input-icon-wrap">
+                <span class="input-prefix">₹</span>
+                <input type="number" id="p-selling" placeholder="0.00" min="0" step="0.01" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Profit Preview</label>
+              <div class="profit-preview" id="profit-preview">Enter prices to see margin</div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="reset" class="btn btn-secondary">Reset</button>
+            <button type="submit" class="btn btn-primary">➕ Add Product</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══ PRODUCT LIST PAGE ═══ -->
+    <section class="page" id="page-products">
+      <div class="page-header">
+        <h1>Product List</h1>
+        <p class="page-sub">Manage your inventory</p>
+      </div>
+
+      <div class="list-controls">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Search by product name…" oninput="filterProducts()" />
+        </div>
+        <button class="btn btn-primary" onclick="navigate('add-product')">➕ Add Product</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="products-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product Name</th>
+              <th>Stock Qty</th>
+              <th>Damage Qty</th>
+              <th>Wholesale (₹)</th>
+              <th>Selling (₹)</th>
+              <th>Margin</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody">
+            <tr><td colspan="8" class="empty-state">No products added yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══ BILLING PAGE ═══ -->
+    <section class="page" id="page-billing">
+      <div class="page-header">
+        <h1>Billing</h1>
+        <p class="page-sub">Create a sale transaction</p>
+      </div>
+
+      <div class="form-card">
+        <form id="billing-form" onsubmit="processBilling(event)">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="b-product">Select Product <span class="req">*</span></label>
+              <select id="b-product" required onchange="updateBillingPreview()">
+                <option value="">— Choose a product —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="b-qty">Quantity to Sell <span class="req">*</span></label>
+              <input type="number" id="b-qty" placeholder="e.g. 5" min="1" required oninput="updateBillingPreview()" />
+            </div>
+            <div class="form-group">
+              <label>Available Stock</label>
+              <div class="info-box" id="b-stock">—</div>
+            </div>
+          </div>
+
+          <!-- Bill Preview -->
+          <div class="bill-preview" id="bill-preview" style="display:none">
+            <div class="bill-title">🧾 Bill Preview</div>
+            <div class="bill-row"><span>Product</span><span id="bp-name">—</span></div>
+            <div class="bill-row"><span>Quantity</span><span id="bp-qty">—</span></div>
+            <div class="bill-row"><span>Selling Price</span><span id="bp-unit">—</span></div>
+            <div class="bill-row total"><span>Total Amount</span><span id="bp-total">—</span></div>
+            <div class="bill-row profit"><span>Profit</span><span id="bp-profit">—</span></div>
+          </div>
+
+          <div class="form-actions">
+            <button type="reset" class="btn btn-secondary" onclick="resetBilling()">Reset</button>
+            <button type="submit" class="btn btn-primary">🧾 Process Sale</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══ DAMAGE ENTRY PAGE ═══ -->
+    <section class="page" id="page-damage">
+      <div class="page-header">
+        <h1>Damage Entry</h1>
+        <p class="page-sub">Record damaged or lost stock</p>
+      </div>
+
+      <div class="form-card">
+        <form id="damage-form" onsubmit="processDamage(event)">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="d-product">Select Product <span class="req">*</span></label>
+              <select id="d-product" required onchange="updateDamagePreview()">
+                <option value="">— Choose a product —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="d-qty">Damage Quantity <span class="req">*</span></label>
+              <input type="number" id="d-qty" placeholder="e.g. 2" min="1" required oninput="updateDamagePreview()" />
+            </div>
+            <div class="form-group">
+              <label>Available Stock</label>
+              <div class="info-box" id="d-stock">—</div>
+            </div>
+          </div>
+
+          <!-- Damage Preview -->
+          <div class="bill-preview damage-preview" id="damage-preview" style="display:none">
+            <div class="bill-title">⚠️ Damage Loss Preview</div>
+            <div class="bill-row"><span>Product</span><span id="dp-name">—</span></div>
+            <div class="bill-row"><span>Damage Qty</span><span id="dp-qty">—</span></div>
+            <div class="bill-row"><span>Wholesale Price</span><span id="dp-unit">—</span></div>
+            <div class="bill-row total loss"><span>Total Loss</span><span id="dp-total">—</span></div>
+          </div>
+
+          <div class="form-actions">
+            <button type="reset" class="btn btn-secondary" onclick="resetDamage()">Reset</button>
+            <button type="submit" class="btn btn-danger">⚠️ Record Damage</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══ TRANSACTIONS PAGE ═══ -->
+    <section class="page" id="page-transactions">
+      <div class="page-header">
+        <h1>Transaction History</h1>
+        <p class="page-sub">All sale and damage records</p>
+      </div>
+
+      <div class="list-controls">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="txn-search" placeholder="Search transactions…" oninput="filterTransactions()" />
+        </div>
+        <select id="txn-filter" onchange="filterTransactions()" class="filter-select">
+          <option value="all">All Types</option>
+          <option value="sale">Sales Only</option>
+          <option value="damage">Damage Only</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="txn-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date & Time</th>
+              <th>Product</th>
+              <th>Type</th>
+              <th>Quantity</th>
+              <th>Amount (₹)</th>
+              <th>Profit/Loss (₹)</th>
+            </tr>
+          </thead>
+          <tbody id="txn-tbody">
+            <tr><td colspan="7" class="empty-state">No transactions yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── Toast Notification ─── -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ─── Delete Confirmation Modal ─── -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none">
+    <div class="modal">
+      <div class="modal-icon">🗑️</div>
+      <h2>Delete Product?</h2>
+      <p id="modal-msg">This will permanently remove the product and all associated data.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-danger" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
