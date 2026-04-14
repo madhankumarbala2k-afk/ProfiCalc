@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login – ProfiCalc</title>
+  <meta name="description" content="Login to ProfiCalc – Your Smart Shop Profit Calculator." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Auth page overrides ── */
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated background orbs */
+    body::before {
+      content: '';
+      position: fixed;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(108,99,255,.18) 0%, transparent 70%);
+      top: -120px; left: -120px;
+      border-radius: 50%;
+      animation: floatOrb 8s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(79,195,247,.14) 0%, transparent 70%);
+      bottom: -100px; right: -100px;
+      border-radius: 50%;
+      animation: floatOrb 10s ease-in-out infinite alternate-reverse;
+      pointer-events: none;
+    }
+
+    @keyframes floatOrb {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(30px, 30px) scale(1.08); }
+    }
+
+    /* Auth card */
+    .auth-wrapper {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+      position: relative;
+      z-index: 10;
+      animation: slideUp .5s cubic-bezier(.4,0,.2,1) both;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 36px;
+    }
+
+    .auth-brand-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 900; color: #fff;
+      box-shadow: 0 8px 24px rgba(108,99,255,.4);
+    }
+
+    .auth-brand-text .brand-name {
+      font-size: 1.5rem; font-weight: 800;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+    }
+
+    .auth-brand-text .brand-sub {
+      font-size: .72rem; color: var(--muted); margin-top: 2px;
+    }
+
+    .auth-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      backdrop-filter: blur(10px);
+    }
+
+    .auth-title {
+      font-size: 1.6rem; font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: .875rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    .auth-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 18px;
+    }
+
+    .auth-label {
+      font-size: .8rem; font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .auth-input-wrap {
+      position: relative;
+    }
+
+    .auth-input-icon {
+      position: absolute;
+      left: 14px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      pointer-events: none;
+      color: var(--muted);
+    }
+
+    .auth-input {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 12px 14px 12px 42px;
+      font-size: .95rem;
+      font-family: inherit;
+      width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .auth-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(108,99,255,.22);
+    }
+
+    .auth-input::placeholder { color: var(--muted); }
+
+    .auth-btn {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--accent), #5b52e0);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 8px;
+      box-shadow: 0 6px 20px rgba(108,99,255,.45);
+      transition: transform .2s, box-shadow .2s;
+      letter-spacing: .02em;
+    }
+
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(108,99,255,.55);
+    }
+
+    .auth-btn:active { transform: translateY(0); }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .auth-link-row {
+      text-align: center;
+      font-size: .875rem;
+      color: var(--muted);
+      margin-top: 20px;
+    }
+
+    .auth-link-row a {
+      color: var(--accent2);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color .2s;
+    }
+
+    .auth-link-row a:hover { color: #fff; text-decoration: underline; }
+
+    /* Error message */
+    .auth-error {
+      display: none;
+      background: rgba(239,68,68,.12);
+      border: 1px solid rgba(239,68,68,.35);
+      color: var(--red);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: .875rem;
+      font-weight: 500;
+      margin-bottom: 18px;
+      animation: fadeIn .25s ease;
+    }
+
+    .auth-error.show { display: flex; align-items: center; gap: 8px; }
+
+    /* Password toggle */
+    .toggle-pw {
+      position: absolute;
+      right: 14px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .9rem;
+      padding: 2px;
+      transition: color .2s;
+    }
+    .toggle-pw:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <div class="auth-wrapper">
+    <!-- Brand -->
+    <div class="auth-brand">
+      <div class="auth-brand-icon">₹</div>
+      <div class="auth-brand-text">
+        <div class="brand-name">ProfiCalc</div>
+        <div class="brand-sub">Smart Shop Manager</div>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div class="auth-card">
+      <h1 class="auth-title">Welcome back 👋</h1>
+      <p class="auth-subtitle">Sign in to your account to continue</p>
+
+      <!-- Error message -->
+      <div class="auth-error" id="login-error">
+        <span>⚠️</span>
+        <span id="login-error-text">Invalid username or password</span>
+      </div>
+
+      <form id="login-form" onsubmit="handleLogin(event)" novalidate>
+
+        <!-- Username -->
+        <div class="auth-form-group">
+          <label class="auth-label" for="login-username">Username</label>
+          <div class="auth-input-wrap">
+            <span class="auth-input-icon">👤</span>
+            <input
+              type="text"
+              id="login-username"
+              class="auth-input"
+              placeholder="Enter your username"
+              autocomplete="username"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="auth-form-group">
+          <label class="auth-label" for="login-password">Password</label>
+          <div class="auth-input-wrap">
+            <span class="auth-input-icon">🔒</span>
+            <input
+              type="password"
+              id="login-password"
+              class="auth-input"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            />
+            <button type="button" class="toggle-pw" id="toggle-login-pw" onclick="togglePassword('login-password','toggle-login-pw')" title="Show/Hide password">👁️</button>
+          </div>
+        </div>
+
+        <button type="submit" class="auth-btn" id="login-btn">🔐 Login</button>
+      </form>
+
+      <div class="auth-divider">or</div>
+
+      <div class="auth-link-row">
+        Don't have an account?
+        <a href="signup.html" id="go-signup">Sign up</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Redirect if already logged in ──
+    (function() {
+      if (localStorage.getItem('isLoggedIn') === 'true') {
+        window.location.href = 'index.html';
+      }
+    })();
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errorEl = document.getElementById('login-error');
+
+      // Retrieve stored user
+      const stored = localStorage.getItem('user');
+      if (!stored) {
+        showError('No account found. Please sign up first.');
+        return;
+      }
+
+      const user = JSON.parse(stored);
+      if (user.username === username && user.password === password) {
+        // Success
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('loggedInUser', username);
+        window.location.href = 'index.html';
+      } else {
+        showError('Invalid username or password');
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('login-error');
+      document.getElementById('login-error-text').textContent = msg;
+      el.classList.add('show');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function togglePassword(inputId, btnId) {
+      const input = document.getElementById(inputId);
+      const btn = document.getElementById(btnId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
+  </script>
+</body>
+</html>

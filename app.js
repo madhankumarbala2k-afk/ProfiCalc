@@ -44,6 +44,8 @@ function navigate(pageId) {
     'billing':     populateBillingDropdown,
     'damage':      populateDamageDropdown,
     'transactions':renderTransactions,
+    'reports':     refreshReports,
+    'export':      refreshExportCounts,
   };
 
   if (refreshMap[pageId]) refreshMap[pageId]();
@@ -618,6 +620,415 @@ function clearAllData() {
 }
 
 /* ════════════════════════════════════════════
+   AUTHENTICATION
+   ════════════════════════════════════════════ */
+function handleLogout() {
+  if (!confirm('Are you sure you want to logout?')) return;
+  localStorage.removeItem('isLoggedIn');
+  localStorage.removeItem('loggedInUser');
+  window.location.replace('login.html');
+}
+
+function initAuth() {
+  // Display logged-in username in sidebar
+  const username = localStorage.getItem('loggedInUser') || 'User';
+  const usernameEl = document.getElementById('sidebar-username');
+  const avatarEl   = document.getElementById('sidebar-avatar');
+  if (usernameEl) usernameEl.textContent = username;
+  if (avatarEl)   avatarEl.textContent   = username.charAt(0).toUpperCase();
+}
+
+/* ════════════════════════════════════════════
+   REPORTS & ANALYTICS
+   ════════════════════════════════════════════ */
+let currentReportPeriod = 'week';
+
+function switchReportTab(period) {
+  currentReportPeriod = period;
+  document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
+  const btn = document.querySelector(`.report-tab[data-period="${period}"]`);
+  if (btn) btn.classList.add('active');
+  refreshReports();
+}
+
+function getDateRange(period) {
+  const now   = new Date();
+  const start = new Date();
+  if (period === 'week') {
+    const day = now.getDay() || 7;
+    start.setDate(now.getDate() - day + 1);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === 'month') {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === 'year') {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    return { start: new Date(0), end: new Date(now.getTime() + 86400000) };
+  }
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function calcStats(txns) {
+  let sales = 0, profit = 0, damage = 0;
+  txns.forEach(t => {
+    if (t.type === 'sale')   { sales += t.amount; profit += t.profit; }
+    if (t.type === 'damage') { damage += t.amount; }
+  });
+  const net    = profit - damage;
+  const margin = sales > 0 ? ((profit / sales) * 100).toFixed(1) : 0;
+  return { sales, profit, damage, net, margin, count: txns.length };
+}
+
+function refreshReports() {
+  const period  = currentReportPeriod;
+  const { start, end } = getDateRange(period);
+  const allTxns = getTransactions();
+
+  const txns = allTxns.filter(t => {
+    const d = new Date(t.date);
+    return d >= start && d <= end;
+  });
+
+  const stats = calcStats(txns);
+
+  document.getElementById('r-sales').textContent  = fmt(stats.sales);
+  document.getElementById('r-profit').textContent = fmt(stats.profit);
+  document.getElementById('r-damage').textContent = fmt(stats.damage);
+  document.getElementById('r-net').textContent    = fmt(stats.net);
+  document.getElementById('r-txns').textContent   = stats.count;
+  document.getElementById('r-margin').textContent = stats.margin + '%';
+
+  document.getElementById('r-net').style.color    = stats.net >= 0    ? 'var(--green)' : 'var(--red)';
+  document.getElementById('r-margin').style.color = stats.margin >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Period label
+  const labels = {
+    week:  `${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} – ${end.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`,
+    month: start.toLocaleDateString('en-IN', { month:'long', year:'numeric' }),
+    year:  start.getFullYear().toString(),
+    all:   'All Time',
+  };
+  document.getElementById('report-period-label').textContent = labels[period];
+
+  renderReportBreakdown(period, allTxns);
+  renderTopProducts(txns);
+}
+
+function renderReportBreakdown(period, allTxns) {
+  const tbody = document.getElementById('report-tbody');
+  const { start, end } = getDateRange(period);
+  const groups = {};
+
+  allTxns.forEach(t => {
+    const d = new Date(t.date);
+    if (d < start || d > end) return;
+
+    let key;
+    if (period === 'year') {
+      key = d.toLocaleDateString('en-IN', { month:'long', year:'numeric' });
+    } else {
+      key = d.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+    }
+
+    if (!groups[key]) groups[key] = { sales:0, profit:0, damage:0, count:0 };
+    if (t.type === 'sale')   { groups[key].sales += t.amount; groups[key].profit += t.profit; }
+    if (t.type === 'damage') { groups[key].damage += t.amount; }
+    groups[key].count++;
+  });
+
+  const keys = Object.keys(groups);
+  if (keys.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No data for this period</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = keys.map(k => {
+    const g   = groups[k];
+    const net = g.profit - g.damage;
+    const nc  = net >= 0 ? 'var(--green)' : 'var(--red)';
+    const ns  = net >= 0 ? '+' : '-';
+    return `<tr>
+      <td style="font-weight:600">${k}</td>
+      <td>${fmt(g.sales)}</td>
+      <td style="color:var(--green)">${fmt(g.profit)}</td>
+      <td style="color:var(--red)">${fmt(g.damage)}</td>
+      <td style="color:${nc};font-weight:700">${ns}${fmt(Math.abs(net))}</td>
+      <td><span class="badge badge-sale">${g.count}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTopProducts(txns) {
+  const map = {};
+  txns.filter(t => t.type === 'sale').forEach(t => {
+    if (!map[t.productName]) map[t.productName] = { qty:0, revenue:0, profit:0 };
+    map[t.productName].qty     += t.qty;
+    map[t.productName].revenue += t.amount;
+    map[t.productName].profit  += t.profit;
+  });
+
+  const sorted = Object.entries(map).sort((a,b) => b[1].revenue - a[1].revenue).slice(0, 10);
+  const tbody  = document.getElementById('top-products-tbody');
+
+  if (!sorted.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sales data for this period</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map(([name, d], i) => `<tr>
+    <td style="color:var(--muted)">${i+1}</td>
+    <td style="font-weight:600">${escHtml(name)}</td>
+    <td>${d.qty} units</td>
+    <td>${fmt(d.revenue)}</td>
+    <td style="color:${d.profit>=0?'var(--green)':'var(--red)'};font-weight:700">${fmt(d.profit)}</td>
+  </tr>`).join('');
+}
+
+/* ════════════════════════════════════════════
+   DATA VIEWER
+   ════════════════════════════════════════════ */
+let currentDataView = 'profit';
+
+function refreshExportCounts() {
+  // renamed but kept for nav refresh map compatibility
+  switchDataView(currentDataView, true);
+}
+
+function switchDataView(view, silent) {
+  currentDataView = view;
+
+  // Toggle tabs
+  document.querySelectorAll('#dv-tabs .report-tab').forEach(t => t.classList.remove('active'));
+  const activeTab = document.querySelector(`#dv-tabs [data-dv="${view}"]`);
+  if (activeTab) activeTab.classList.add('active');
+
+  // Toggle panels
+  document.getElementById('dv-profit').style.display = view === 'profit' ? '' : 'none';
+  document.getElementById('dv-stock').style.display  = view === 'stock'  ? '' : 'none';
+
+  if (view === 'profit') renderProfitHistory();
+  else                   renderStockData();
+}
+
+/* ── Profit History ── */
+function renderProfitHistory() {
+  const q      = (document.getElementById('dv-profit-search').value || '').toLowerCase();
+  const type   = document.getElementById('dv-profit-type').value;
+  const period = document.getElementById('dv-profit-period').value;
+
+  let txns = getTransactions().slice().reverse(); // newest first
+
+  // Period filter
+  if (period !== 'all') {
+    const { start, end } = period === 'today'
+      ? (() => {
+          const s = new Date(); s.setHours(0,0,0,0);
+          const e = new Date(); e.setHours(23,59,59,999);
+          return { start: s, end: e };
+        })()
+      : getDateRange(period);
+    txns = txns.filter(t => { const d = new Date(t.date); return d >= start && d <= end; });
+  }
+
+  // Type filter
+  if (type !== 'all') txns = txns.filter(t => t.type === type);
+
+  // Search filter
+  if (q) txns = txns.filter(t => t.productName.toLowerCase().includes(q));
+
+  // Summary strip
+  const stats = calcStats(txns);
+  const strip = document.getElementById('dv-profit-strip');
+  strip.innerHTML = `
+    <div class="dv-stat">💰 <span>Sales</span> <strong>${fmt(stats.sales)}</strong></div>
+    <div class="dv-stat">📈 <span>Gross Profit</span> <strong style="color:var(--green)">${fmt(stats.profit)}</strong></div>
+    <div class="dv-stat">📉 <span>Damage Loss</span> <strong style="color:var(--red)">${fmt(stats.damage)}</strong></div>
+    <div class="dv-stat">🏆 <span>Net Profit</span> <strong style="color:${stats.net>=0?'var(--green)':'var(--red)'}">${fmt(stats.net)}</strong></div>
+    <div class="dv-stat">🧾 <span>Records</span> <strong>${stats.count}</strong></div>
+  `;
+
+  // Table
+  const tbody = document.getElementById('dv-profit-tbody');
+  if (!txns.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No records found for this filter</td></tr>';
+    document.getElementById('dv-profit-count').textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = txns.map((t, i) => {
+    const isSale = t.type === 'sale';
+    const pl     = isSale ? t.profit : -t.amount;
+    const plColor = pl >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td style="color:var(--muted);font-size:.8rem">${i+1}</td>
+      <td style="font-size:.82rem;color:var(--muted)">${fmtDate(t.date)}</td>
+      <td style="font-weight:600">${escHtml(t.productName)}</td>
+      <td><span class="badge ${isSale?'badge-sale':'badge-damage'}">${isSale?'📦 Sale':'⚠️ Damage'}</span></td>
+      <td>${t.qty}</td>
+      <td>${fmt(t.amount)}</td>
+      <td style="color:${plColor};font-weight:700">${pl>=0?'+':''}${fmt(pl)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dv-profit-count').textContent = `Showing ${txns.length} record${txns.length!==1?'s':''}`;
+}
+
+/* ── Stock Data ── */
+function renderStockData() {
+  const q      = (document.getElementById('dv-stock-search').value || '').toLowerCase();
+  const filter = document.getElementById('dv-stock-filter').value;
+  const txns   = getTransactions();
+
+  // Build profit earned per product from transactions
+  const profitMap = {};
+  txns.forEach(t => {
+    if (t.type === 'sale') {
+      profitMap[t.productId] = (profitMap[t.productId] || 0) + t.profit;
+    }
+  });
+
+  let prds = getProducts();
+
+  // Search
+  if (q) prds = prds.filter(p => p.name.toLowerCase().includes(q));
+
+  // Stock filter
+  if      (filter === 'low') prds = prds.filter(p => p.stock > 0 && p.stock < 5);
+  else if (filter === 'out') prds = prds.filter(p => p.stock === 0);
+  else if (filter === 'ok')  prds = prds.filter(p => p.stock >= 5);
+
+  // Summary strip
+  const totalStock  = prds.reduce((s, p) => s + p.stock, 0);
+  const totalDamage = prds.reduce((s, p) => s + p.damage, 0);
+  const lowCount    = prds.filter(p => p.stock > 0 && p.stock < 5).length;
+  const outCount    = prds.filter(p => p.stock === 0).length;
+  const totalEarned = prds.reduce((s, p) => s + (profitMap[p.id] || 0), 0);
+
+  const strip = document.getElementById('dv-stock-strip');
+  strip.innerHTML = `
+    <div class="dv-stat">📦 <span>Products</span> <strong>${prds.length}</strong></div>
+    <div class="dv-stat">✅ <span>Total Units</span> <strong>${totalStock}</strong></div>
+    <div class="dv-stat">⚠️ <span>Low Stock</span> <strong style="color:var(--orange)">${lowCount}</strong></div>
+    <div class="dv-stat">🚫 <span>Out of Stock</span> <strong style="color:var(--red)">${outCount}</strong></div>
+    <div class="dv-stat">💸 <span>Damage Units</span> <strong style="color:var(--red)">${totalDamage}</strong></div>
+    <div class="dv-stat">🏆 <span>Profit Earned</span> <strong style="color:var(--green)">${fmt(totalEarned)}</strong></div>
+  `;
+
+  const tbody = document.getElementById('dv-stock-tbody');
+  if (!prds.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No products found</td></tr>';
+    document.getElementById('dv-stock-count').textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = prds.map((p, i) => {
+    const margin      = p.selling - p.wholesale;
+    const marginColor = margin >= 0 ? 'var(--green)' : 'var(--red)';
+    const earned      = profitMap[p.id] || 0;
+    let statusBadge;
+    if      (p.stock === 0)         statusBadge = '<span class="badge badge-red">🚫 Out of Stock</span>';
+    else if (p.stock < 5)           statusBadge = '<span class="badge badge-orange">⚠️ Low Stock</span>';
+    else                            statusBadge = '<span class="badge badge-green">✅ In Stock</span>';
+    return `<tr>
+      <td style="color:var(--muted);font-size:.8rem">${i+1}</td>
+      <td style="font-weight:600">${escHtml(p.name)}</td>
+      <td><span class="badge ${p.stock===0?'badge-red':p.stock<5?'badge-orange':'badge-green'}">${p.stock}</span></td>
+      <td><span class="badge badge-red">${p.damage}</span></td>
+      <td>${fmt(p.wholesale)}</td>
+      <td>${fmt(p.selling)}</td>
+      <td style="color:${marginColor};font-weight:600">${margin>=0?'+':''}${fmt(margin)}</td>
+      <td style="color:var(--green);font-weight:700">${fmt(earned)}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dv-stock-count').textContent = `Showing ${prds.length} product${prds.length!==1?'s':''}`;
+}
+
+
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvRow(arr) {
+  return arr.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+}
+
+function exportTransactionsCSV() {
+  const txns = getTransactions();
+  if (!txns.length) { showToast('No transactions to export','warning'); return; }
+  const header = csvRow(['#','Date & Time','Product','Type','Quantity','Amount (INR)','Profit/Loss (INR)']);
+  const rows   = txns.map((t,i) => csvRow([
+    i+1,
+    new Date(t.date).toLocaleString('en-IN'),
+    t.productName,
+    t.type === 'sale' ? 'Sale' : 'Damage',
+    t.qty,
+    t.amount.toFixed(2),
+    (t.type === 'sale' ? t.profit : -t.amount).toFixed(2),
+  ]));
+  const date = new Date().toISOString().slice(0,10);
+  downloadFile('\uFEFF' + [header,...rows].join('\r\n'), `ProfiCalc_Transactions_${date}.csv`, 'text/csv;charset=utf-8;');
+  showToast(`✅ Exported ${txns.length} transactions`, 'success');
+}
+
+function exportProductsCSV() {
+  const prds = getProducts();
+  if (!prds.length) { showToast('No products to export','warning'); return; }
+  const header = csvRow(['#','Product Name','Stock Qty','Damage Qty','Wholesale (INR)','Selling (INR)','Margin (INR)','Margin %','Added Date']);
+  const rows   = prds.map((p,i) => {
+    const margin = p.selling - p.wholesale;
+    const mpct   = p.wholesale > 0 ? ((margin/p.wholesale)*100).toFixed(1) : '0';
+    return csvRow([i+1, p.name, p.stock, p.damage, p.wholesale.toFixed(2), p.selling.toFixed(2), margin.toFixed(2), mpct+'%', new Date(p.createdAt).toLocaleDateString('en-IN')]);
+  });
+  const date = new Date().toISOString().slice(0,10);
+  downloadFile('\uFEFF' + [header,...rows].join('\r\n'), `ProfiCalc_Products_${date}.csv`, 'text/csv;charset=utf-8;');
+  showToast(`✅ Exported ${prds.length} products`, 'success');
+}
+
+function exportMonthlyCSV() {
+  const txns = getTransactions();
+  if (!txns.length) { showToast('No transactions to generate report','warning'); return; }
+  const monthMap = {};
+  txns.forEach(t => {
+    const d   = new Date(t.date);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const lbl = d.toLocaleDateString('en-IN', { month:'long', year:'numeric' });
+    if (!monthMap[key]) monthMap[key] = { label:lbl, sales:0, profit:0, damage:0, count:0 };
+    if (t.type==='sale')   { monthMap[key].sales+=t.amount; monthMap[key].profit+=t.profit; }
+    if (t.type==='damage') { monthMap[key].damage+=t.amount; }
+    monthMap[key].count++;
+  });
+  const header = csvRow(['Month','Total Sales (INR)','Gross Profit (INR)','Damage Loss (INR)','Net Profit (INR)','Transactions']);
+  const rows   = Object.keys(monthMap).sort().map(k => {
+    const m = monthMap[k]; const net = m.profit - m.damage;
+    return csvRow([m.label, m.sales.toFixed(2), m.profit.toFixed(2), m.damage.toFixed(2), net.toFixed(2), m.count]);
+  });
+  const all = calcStats(txns);
+  rows.push(csvRow(['TOTAL', all.sales.toFixed(2), all.profit.toFixed(2), all.damage.toFixed(2), all.net.toFixed(2), txns.length]));
+  const date = new Date().toISOString().slice(0,10);
+  downloadFile('\uFEFF' + [header,...rows].join('\r\n'), `ProfiCalc_Monthly_Report_${date}.csv`, 'text/csv;charset=utf-8;');
+  showToast('✅ Monthly report exported', 'success');
+}
+
+function exportFullBackup() {
+  const backup = { exportedAt: new Date().toISOString(), exportedBy: localStorage.getItem('loggedInUser')||'unknown', products: getProducts(), transactions: getTransactions() };
+  const date = new Date().toISOString().slice(0,10);
+  downloadFile(JSON.stringify(backup, null, 2), `ProfiCalc_Backup_${date}.json`, 'application/json');
+  showToast('💾 Full backup downloaded!', 'success');
+}
+
+/* ════════════════════════════════════════════
    ESCAPE HTML
    ════════════════════════════════════════════ */
 function escHtml(str) {
@@ -632,5 +1043,6 @@ function escHtml(str) {
    INIT
    ════════════════════════════════════════════ */
 (function init() {
+  initAuth();
   navigate('dashboard');
 })();
