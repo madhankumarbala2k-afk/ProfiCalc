@@ -12,6 +12,7 @@ const KEYS = {
 
 /* ─── State ─── */
 let pendingDeleteId = null;
+let currentCart = [];
 
 /* ════════════════════════════════════════════
    STORAGE HELPERS
@@ -372,13 +373,26 @@ function deleteProduct(id) {
 }
 
 /* ════════════════════════════════════════════
-   BILLING
+   BILLING (MULTI-ITEM CART & INVOICING)
    ════════════════════════════════════════════ */
 function populateBillingDropdown() {
   const products = getProducts().filter(p => p.stock > 0);
   const sel = document.getElementById('b-product');
   sel.innerHTML = '<option value="">— Choose a product —</option>' +
-    products.map(p => `<option value="${p.id}">${escHtml(p.name)} (Stock: ${p.stock})</option>`).join('');
+    products.map(p => {
+      // Calculate remaining stock based on cart
+      const qtyInCart = currentCart
+        .filter(item => item.productId === p.id)
+        .reduce((sum, item) => sum + item.qty, 0);
+      const remainingStock = p.stock - qtyInCart;
+      
+      if (remainingStock > 0) {
+        return `<option value="${p.id}">${escHtml(p.name)} (Stock: ${remainingStock})</option>`;
+      }
+      return '';
+    }).join('');
+  
+  renderCart();
   resetBilling();
 }
 
@@ -389,21 +403,24 @@ function updateBillingPreview() {
   const product  = products.find(p => p.id === id);
 
   if (product) {
-    document.getElementById('b-stock').textContent = `${product.stock} units available`;
-    document.getElementById('b-stock').style.color = product.stock < 5 ? 'var(--orange)' : 'var(--green)';
+    const qtyInCart = currentCart
+      .filter(item => item.productId === id)
+      .reduce((sum, item) => sum + item.qty, 0);
+    const remainingStock = product.stock - qtyInCart;
+    
+    document.getElementById('b-stock').textContent = `${remainingStock} units available`;
+    document.getElementById('b-stock').style.color = remainingStock < 5 ? 'var(--orange)' : 'var(--green)';
   }
 
   const preview = document.getElementById('bill-preview');
 
   if (product && qty > 0) {
     const total  = product.selling * qty;
-    const profit = (product.selling - product.wholesale) * qty;
 
     document.getElementById('bp-name').textContent   = product.name;
     document.getElementById('bp-qty').textContent    = qty + ' units';
     document.getElementById('bp-unit').textContent   = fmt(product.selling) + ' /unit';
     document.getElementById('bp-total').textContent  = fmt(total);
-    document.getElementById('bp-profit').textContent = fmt(profit);
 
     preview.style.display = 'block';
   } else {
@@ -411,7 +428,7 @@ function updateBillingPreview() {
   }
 }
 
-function processBilling(e) {
+function addBillingItem(e) {
   e.preventDefault();
 
   const id  = parseInt(document.getElementById('b-product').value);
@@ -422,52 +439,424 @@ function processBilling(e) {
     return;
   }
 
-  let products = getProducts();
-  const idx    = products.findIndex(p => p.id === id);
+  const products = getProducts();
+  const product  = products.find(p => p.id === id);
 
-  if (idx === -1) { showToast('Product not found', 'error'); return; }
-
-  const product = products[idx];
-
-  if (qty > product.stock) {
-    showToast(`⚠️ Only ${product.stock} units in stock!`, 'warning');
+  if (!product) {
+    showToast('Product not found', 'error');
     return;
   }
 
-  // Process sale
-  const total  = product.selling * qty;
-  const profit = (product.selling - product.wholesale) * qty;
+  // Calculate existing quantity in cart
+  const qtyInCart = currentCart
+    .filter(item => item.productId === id)
+    .reduce((sum, item) => sum + item.qty, 0);
+  const remainingStock = product.stock - qtyInCart;
 
-  products[idx].stock -= qty;
-  saveProducts(products);
+  if (qty > remainingStock) {
+    showToast(`⚠️ Only ${remainingStock} units available to add!`, 'warning');
+    return;
+  }
 
-  // Save transaction
+  // Add or update cart item
+  const cartIdx = currentCart.findIndex(item => item.productId === id);
+  if (cartIdx > -1) {
+    currentCart[cartIdx].qty += qty;
+    currentCart[cartIdx].totalAmount = currentCart[cartIdx].qty * product.selling;
+    currentCart[cartIdx].profit = currentCart[cartIdx].qty * (product.selling - product.wholesale);
+  } else {
+    currentCart.push({
+      productId: id,
+      productName: product.name,
+      qty: qty,
+      selling: product.selling,
+      wholesale: product.wholesale,
+      totalAmount: qty * product.selling,
+      profit: qty * (product.selling - product.wholesale)
+    });
+  }
+
+  showToast(`Added ${qty} × ${product.name} to bill`, 'success');
+
+  // Reset inputs
+  document.getElementById('b-product').value = '';
+  document.getElementById('b-qty').value = '';
+  document.getElementById('b-stock').textContent = '—';
+  document.getElementById('bill-preview').style.display = 'none';
+
+  renderCart();
+  populateBillingDropdown();
+}
+
+function renderCart() {
+  const tbody = document.getElementById('cart-tbody');
+  if (currentCart.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No products added to the bill yet.</td></tr>';
+    document.getElementById('cart-total-items').textContent = '0 items';
+    document.getElementById('cart-grand-total').textContent = fmt(0);
+    return;
+  }
+
+  tbody.innerHTML = currentCart.map(item => `
+    <tr>
+      <td style="font-weight: 600;">${escHtml(item.productName)}</td>
+      <td>${fmt(item.selling)}</td>
+      <td>${item.qty}</td>
+      <td>${fmt(item.totalAmount)}</td>
+      <td>
+        <button class="cart-remove-btn" type="button" onclick="removeFromCart(${item.productId})" title="Remove item">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+
+  const totalItems = currentCart.reduce((sum, item) => sum + item.qty, 0);
+  const grandTotal = currentCart.reduce((sum, item) => sum + item.totalAmount, 0);
+
+  document.getElementById('cart-total-items').textContent = `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+  document.getElementById('cart-grand-total').textContent = fmt(grandTotal);
+}
+
+function removeFromCart(productId) {
+  const idx = currentCart.findIndex(item => item.productId === productId);
+  if (idx > -1) {
+    const item = currentCart[idx];
+    currentCart.splice(idx, 1);
+    showToast(`Removed ${item.productName} from bill`, 'warning');
+    renderCart();
+    populateBillingDropdown();
+  }
+}
+
+function clearCart() {
+  currentCart = [];
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-mobile').value = '';
+  document.getElementById('billing-form').reset();
+  document.getElementById('b-stock').textContent = '—';
+  document.getElementById('bill-preview').style.display = 'none';
+  renderCart();
+  populateBillingDropdown();
+  showToast('Bill cleared', 'info');
+}
+
+function checkoutCart() {
+  if (currentCart.length === 0) {
+    showToast('Please add products to the bill first', 'error');
+    return;
+  }
+
+  let products = getProducts();
   const txns = getTransactions();
-  txns.push({
-    id:          Date.now(),
-    type:        'sale',
-    productId:   id,
-    productName: product.name,
-    qty,
-    amount:      total,
-    profit,
-    date:        new Date().toISOString(),
+  const billId = Date.now();
+  const customerName = document.getElementById('c-name').value.trim() || 'Guest';
+  const customerMobile = document.getElementById('c-mobile').value.trim() || '—';
+  const now = new Date();
+
+  // Validate stock
+  let stockError = false;
+  currentCart.forEach(item => {
+    const dbProduct = products.find(p => p.id === item.productId);
+    if (!dbProduct || dbProduct.stock < item.qty) {
+      showToast(`🚨 Not enough stock for ${item.productName}! Only ${dbProduct ? dbProduct.stock : 0} available.`, 'error');
+      stockError = true;
+    }
   });
+
+  if (stockError) return;
+
+  // Process checkout
+  currentCart.forEach(item => {
+    const dbIdx = products.findIndex(p => p.id === item.productId);
+    products[dbIdx].stock -= item.qty;
+
+    // Create unique sale transaction for each product
+    txns.push({
+      id:          Date.now() + Math.random(),
+      billId:      billId,
+      type:        'sale',
+      productId:   item.productId,
+      productName: item.productName,
+      qty:         item.qty,
+      amount:      item.totalAmount,
+      profit:      item.profit,
+      customerName: customerName,
+      customerMobile: customerMobile,
+      date:        now.toISOString(),
+    });
+  });
+
+  // Save changes
+  saveProducts(products);
   saveTransactions(txns);
 
-  showToast(`✅ Sold ${qty} × ${product.name} for ${fmt(total)}`, 'success');
+  // Show Toast
+  const grandTotal = currentCart.reduce((sum, item) => sum + item.totalAmount, 0);
+  showToast(`✅ Bill processed! Total: ${fmt(grandTotal)}`, 'success');
 
-  // Low stock warning
-  if (products[idx].stock < 5 && products[idx].stock > 0) {
-    setTimeout(() => showToast(`⚠️ Low stock: ${product.name} has only ${products[idx].stock} left`, 'warning'), 3200);
-  }
-  if (products[idx].stock === 0) {
-    setTimeout(() => showToast(`🚨 ${product.name} is now OUT OF STOCK!`, 'error'), 3200);
-  }
+  // Low stock checks
+  currentCart.forEach(item => {
+    const updatedProd = products.find(p => p.id === item.productId);
+    if (updatedProd) {
+      if (updatedProd.stock < 5 && updatedProd.stock > 0) {
+        setTimeout(() => showToast(`⚠️ Low stock: ${updatedProd.name} has only ${updatedProd.stock} left`, 'warning'), 3200);
+      } else if (updatedProd.stock === 0) {
+        setTimeout(() => showToast(`🚨 ${updatedProd.name} is now OUT OF STOCK!`, 'error'), 3200);
+      }
+    }
+  });
 
+  // Render and Open Invoice Modal
+  openInvoiceModal(billId, customerName, customerMobile, now);
+}
+
+function openInvoiceModal(billId, customerName, customerMobile, dateObj) {
+  document.getElementById('invoice-id-display').textContent = `#INV-${billId}`;
+  document.getElementById('invoice-date').textContent = dateObj.toLocaleDateString('en-IN');
+  document.getElementById('invoice-time').textContent = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  document.getElementById('invoice-cust-name').textContent = customerName;
+  document.getElementById('invoice-cust-mobile').textContent = customerMobile;
+
+  const tbody = document.getElementById('invoice-items-tbody');
+  tbody.innerHTML = currentCart.map(item => `
+    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle;">
+      <td style="padding: 8px 0; font-weight: 500; font-size: 0.8rem; color: var(--text);">${escHtml(item.productName)}</td>
+      <td style="padding: 8px 0; text-align: center; font-size: 0.8rem; color: var(--text);">${item.qty}</td>
+      <td style="padding: 8px 0; text-align: right; font-size: 0.8rem; color: var(--text);">${fmt(item.selling)}</td>
+      <td style="padding: 8px 0; text-align: right; font-weight: 600; font-size: 0.8rem; color: var(--text);">${fmt(item.totalAmount)}</td>
+    </tr>
+  `).join('');
+
+  const totalQty = currentCart.reduce((sum, item) => sum + item.qty, 0);
+  const grandTotal = currentCart.reduce((sum, item) => sum + item.totalAmount, 0);
+
+  document.getElementById('invoice-total-qty').textContent = totalQty;
+  document.getElementById('invoice-grand-total').textContent = fmt(grandTotal);
+
+  document.getElementById('invoice-modal-overlay').style.display = 'flex';
+}
+
+function printInvoice() {
+  window.print();
+}
+
+function downloadInvoiceHTML() {
+  const billId = document.getElementById('invoice-id-display').textContent;
+  const date = document.getElementById('invoice-date').textContent;
+  const time = document.getElementById('invoice-time').textContent;
+  const customerName = document.getElementById('invoice-cust-name').textContent;
+  const customerMobile = document.getElementById('invoice-cust-mobile').textContent;
+  const totalQty = document.getElementById('invoice-total-qty').textContent;
+  const grandTotal = document.getElementById('invoice-grand-total').textContent;
+
+  const itemsRows = currentCart.map(item => `
+    <tr>
+      <td>${escHtml(item.productName)}</td>
+      <td style="text-align: center;">${item.qty}</td>
+      <td style="text-align: right;">${fmt(item.selling)}</td>
+      <td style="text-align: right; font-weight: bold;">${fmt(item.totalAmount)}</td>
+    </tr>
+  `).join('');
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice ${billId}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f9fafb;
+      color: #1f2937;
+    }
+    .invoice-card {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      border: 1px solid #e5e7eb;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .shop-name {
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0;
+      color: #6c63ff;
+      letter-spacing: 0.5px;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin: 4px 0 0 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .details-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed #e5e7eb;
+      font-size: 13px;
+    }
+    .details-col {
+      line-height: 1.6;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    th {
+      border-bottom: 2px solid #e5e7eb;
+      text-align: left;
+      padding: 8px 0;
+      color: #4b5563;
+      font-weight: 700;
+    }
+    td {
+      padding: 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .summary-section {
+      border-top: 2px dashed #e5e7eb;
+      padding-top: 12px;
+      font-size: 14px;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .grand-total {
+      font-size: 18px;
+      font-weight: bold;
+      color: #111827;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 12px;
+      color: #9ca3af;
+      border-top: 1px solid #f3f4f6;
+      padding-top: 16px;
+    }
+    .print-btn {
+      display: block;
+      width: 100%;
+      max-width: 200px;
+      margin: 24px auto 0 auto;
+      padding: 10px 20px;
+      background-color: #6c63ff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      box-shadow: 0 2px 4px rgba(108, 99, 255, 0.2);
+    }
+    .print-btn:hover {
+      background-color: #5b52e0;
+    }
+    @media print {
+      body { background-color: #fff; padding: 0; }
+      .invoice-card { box-shadow: none; border: none; padding: 0; }
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-card">
+    <div class="header">
+      <h1 class="shop-name">PROFI CALC SHOP</h1>
+      <p class="subtitle">Smart Billing Receipt</p>
+    </div>
+    
+    <div class="details-row">
+      <div class="details-col">
+        <div><strong>Invoice No:</strong> ${billId}</div>
+        <div><strong>Date:</strong> ${date}</div>
+        <div><strong>Time:</strong> ${time}</div>
+      </div>
+      <div class="details-col" style="text-align: right;">
+        <div><strong>Customer:</strong> ${customerName}</div>
+        <div><strong>Mobile:</strong> ${customerMobile}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th style="text-align: center; width: 60px;">Qty</th>
+          <th style="text-align: right; width: 100px;">Price</th>
+          <th style="text-align: right; width: 120px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsRows}
+      </tbody>
+    </table>
+
+    <div class="summary-section">
+      <div class="summary-row">
+        <span>Total Items:</span>
+        <strong>${totalQty}</strong>
+      </div>
+      <div class="summary-row grand-total">
+        <span>Grand Total:</span>
+        <span>${grandTotal}</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Thank you for shopping with us!</p>
+      <p>Generated by ProfiCalc</p>
+    </div>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">Print Invoice</button>
+</body>
+</html>`;
+
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  
+  // Format filename nicely
+  const filename = `${customerName.replace(/[^a-z0-9]/gi, '_')}_Invoice_${billId.replace('#', '')}.html`;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function closeInvoiceModal() {
+  document.getElementById('invoice-modal-overlay').style.display = 'none';
+  // Empty cart and inputs
+  currentCart = [];
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-mobile').value = '';
   document.getElementById('billing-form').reset();
-  document.getElementById('bill-preview').style.display = 'none';
   document.getElementById('b-stock').textContent = '—';
+  document.getElementById('bill-preview').style.display = 'none';
+  renderCart();
   populateBillingDropdown();
 }
 

@@ -1047,3 +1047,111 @@ select option { background: var(--card); color: var(--text); }
 @media (max-width: 480px) {
   .dv-stat { min-width: calc(50% - 5px); font-size: .75rem; }
 }
+
+/* ════════════════════════════════════════════
+   BILLING CART GRID & PRINTER STYLES
+   ════════════════════════════════════════════ */
+
+.billing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 992px) {
+  .billing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cart-remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+
+.cart-remove-btn:hover {
+  background: rgba(239,68,68,0.15);
+}
+
+/* Print Invoice styles */
+#invoice-print-area {
+  background: #141625;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* Print-specific layout override */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #invoice-modal-overlay,
+  #invoice-modal-overlay * {
+    visibility: visible !important;
+  }
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible !important;
+  }
+  #invoice-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: #fff !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .modal {
+    background: #fff !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  #invoice-print-area {
+    background: #fff !important;
+    color: #000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  #invoice-print-area h3 {
+    color: #000 !important;
+    background: none !important;
+    -webkit-text-fill-color: initial !important;
+  }
+  #invoice-print-area td,
+  #invoice-print-area th,
+  #invoice-print-area span,
+  #invoice-print-area div,
+  #invoice-print-area p,
+  #invoice-print-area strong {
+    color: #000 !important;
+  }
+  #invoice-print-area table {
+    border-color: #000 !important;
+  }
+  #invoice-print-area th {
+    border-bottom: 2px solid #000 !important;
+  }
+  #invoice-items-tbody tr {
+    border-bottom: 1px solid #ddd !important;
+  }
+  .modal-actions, 
+  #invoice-modal-overlay h2,
+  #invoice-id-display {
+    display: none !important;
+  }
+}
